@@ -23,8 +23,8 @@ function closeModal() { const m = $('#modal'); m.hidden = true; m.innerHTML = ''
 const fmt = (s) => { s = Math.max(0, s); return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`; };
 
 const ANIM_LABELS = { fade: 'ظهور تدريجي', rise: 'صعود', drop: 'نزول', slideR: 'انزلاق من اليمين', slideL: 'انزلاق من اليسار', scale: 'تكبير', pop: 'نبضة', wipe: 'مسح من اليمين', wipeUp: 'مسح من الأسفل', blur: 'ضبابي', draw: 'رسم الخط', settle: 'هبوط مائل', flip: 'دوران', none: 'بدون' };
-const TRANS_LABELS = { none: 'بدون', wipe: 'قطع قطري', bars: 'قضبان', slide: 'انزلاق', fade: 'تلاشٍ' };
-const TYPE_LABELS = { text: 'نص', icon: 'أيقونة', polaroid: 'Polaroid', image: 'صورة', video: 'فيديو', art: 'خلفية فنية', fill: 'لون', rays: 'أشعة', sparkles: 'لمسات سحرية', ribbon: 'شريط ساتان', bow: 'فيونكة', bgtext: 'نص خلفي', shape: 'شكل' };
+const TRANS_LABELS = { none: 'بدون', wipe: 'قطع قطري', bars: 'قضبان', slide: 'انزلاق', fade: 'تلاشٍ', satin: 'شريط ساتان', iris: 'دائري' };
+const TYPE_LABELS = { text: 'نص', icon: 'أيقونة', polaroid: 'Polaroid', image: 'صورة', video: 'فيديو', art: 'خلفية فنية', fill: 'لون', rays: 'أشعة', sparkles: 'لمسات سحرية', ribbon: 'شريط ساتان', bow: 'فيونكة', bgtext: 'نص خلفي', shape: 'شكل', book: 'كتاب (رسم)', prints: 'مطبوعات (رسم)', invite: 'بطاقة دعوة (رسم)' };
 const ART_LABELS = { lattice: 'معيّنات', frames: 'إطارات', rings: 'حلقات', shards: 'شظايا', lines: 'خطوط', bands: 'أشرطة', grid: 'شبكة' };
 const FONT_LABELS = { display: 'كوفي (عناوين)', body: 'تجوال (نص)', script: 'رقعة (خط يدوي)', serif: 'المسيري (أنيق)' };
 const TOKENS = [['ink', 'النص'], ['bg', 'الخلفية'], ['accent', 'الأحمر'], ['accent2', 'الوردي'], ['muted', 'الرمادي']];
@@ -47,35 +47,54 @@ route();
 // ============ home ============
 async function renderHome() {
   const app = $('#app'); app.innerHTML = '';
-  const form = { title: '', idea: '', kind: 'reel', theme: 'milk' };
+  const status = await api('/api/planner/status').catch(() => null);
+  const form = { title: '', idea: '', kind: 'reel', theme: 'milk', seconds: 26, address: 'f', useLLM: false };
   const kinds = state.brand.kinds, themes = state.brand.brand.themes;
-  const kindChips = el('div', { class: 'chips' });
-  const themeChips = el('div', { class: 'chips' });
+  const kindChips = el('div', { class: 'chips' }), themeChips = el('div', { class: 'chips' }), lenChips = el('div', { class: 'chips' }), addrChips = el('div', { class: 'chips' });
+  const ideaBox = el('textarea', { placeholder: 'مثال: ريل لكتب الذكريات المطبوعة هدية للأم في عيد الأم، غلاف أنيق بشريط ساتان، توصيل لباب البيت، خصم 20% لفترة محدودة، اطلبي من رابط البايو', oninput: (e) => { form.idea = e.target.value; paintBtn(); } });
+  const paintBtn = () => { btnPlan.disabled = form.idea.trim().length < 6; };
   const paint = () => {
-    kindChips.innerHTML = ''; themeChips.innerHTML = '';
+    for (const c of [kindChips, themeChips, lenChips, addrChips]) c.innerHTML = '';
     for (const [k, v] of Object.entries(kinds)) kindChips.append(el('button', { class: 'chip' + (form.kind === k ? ' on' : ''), disabled: !v.ready, title: v.desc, onclick: () => { form.kind = k; paint(); } }, v.label, !v.ready ? el('small', {}, ' · قريبًا') : null));
     for (const [k, v] of Object.entries(themes)) themeChips.append(el('button', { class: 'chip' + (form.theme === k ? ' on' : ''), onclick: () => { form.theme = k; paint(); } }, v.label));
+    for (const [sec, label] of [[16, 'قصير ≈ 16ث'], [26, 'متوسط ≈ 26ث'], [32, 'مفصّل ≈ 32ث']]) lenChips.append(el('button', { class: 'chip' + (form.seconds === sec ? ' on' : ''), onclick: () => { form.seconds = sec; paint(); } }, label));
+    for (const [k, label] of [['f', 'مخاطبة المؤنث'], ['m', 'مخاطبة المذكر']]) addrChips.append(el('button', { class: 'chip' + (form.address === k ? ' on' : ''), onclick: () => { form.address = k; paint(); } }, label));
   };
   paint();
-  const create = el('button', { class: 'btn red', onclick: async (e) => {
-    e.target.disabled = true;
-    try { const r = await api('/api/projects', { method: 'POST', body: form }); location.hash = '#/p/' + r.id; } catch (err) { toast(err.message); e.target.disabled = false; }
-  } }, 'ابدأ المشروع');
+  const examples = [
+    'ريل لكتب الذكريات المطبوعة هدية للأم في عيد الأم، غلاف أنيق بشريط ساتان، توصيل لباب البيت، خصم 20% لفترة محدودة، اطلبي من رابط البايو',
+    'إعلان لدعوات زفاف إلكترونية «ليلة العمر تبدأ برابط» بتصميم خاص، تواصلي معنا عبر واتساب',
+    'فيديو لطباعة الصور بجودة عالية بسعر 49 ريال، جاهزة خلال 3 أيام',
+  ];
+  const exBox = el('div', { class: 'chips', style: 'margin-top:6px' }, examples.map((t, i) => el('button', { class: 'chip', title: t, onclick: () => { ideaBox.value = t; form.idea = t; paintBtn(); } }, 'مثال ' + (i + 1))));
+  const llmOn = status?.llm?.configured;
+  const llmBox = llmOn ? el('label', { style: 'display:flex;gap:8px;align-items:center;font-weight:500;margin-top:10px' }, el('input', { type: 'checkbox', onchange: (e) => { form.useLLM = e.target.checked; } }), `صياغة النصوص بـ Claude (${status.llm.model}) — لم تُختبر حيًا بعد`) : el('small', { style: 'color:var(--muted);display:block;margin-top:10px' }, 'الصياغة بـ Claude غير مفعّلة (تحتاج ANTHROPIC_API_KEY)؛ يعمل المخطِّط المحلي.');
+  const go = async (btn, mode) => {
+    const label = btn.textContent; btn.disabled = true; btn.textContent = mode === 'plan' ? 'جارٍ تحليل الفكرة وبناء المشاهد…' : '…';
+    try {
+      const r = await api('/api/projects', { method: 'POST', body: { ...form, mode } });
+      if (r.warning) sessionStorage.setItem('mm-warn', r.warning);
+      location.hash = '#/p/' + r.id;
+    } catch (err) { toast(err.message); btn.disabled = false; btn.textContent = label; }
+  };
+  const btnPlan = el('button', { class: 'btn red', disabled: true, onclick: (e) => go(e.target, 'plan') }, 'حلّلي الفكرة وأنشئي المخطط');
+  const btnTpl = el('button', { class: 'btn', onclick: (e) => go(e.target, 'template') }, 'ابدئي بقالب جاهز');
   const left = el('div', { class: 'card' },
-    el('h1', { html: 'ماذا نصنع اليوم؟' }),
-    el('p', {}, 'اكتبي فكرة الفيديو واختاري النوع، وسنبدأ بقالب بهوية Ms. Memories تعدّلينه بصريًا.'),
-    el('label', {}, 'فكرة الفيديو'), el('textarea', { placeholder: 'مثال: ريل عن كتاب ذكريات هدية لأم العروس…', oninput: (e) => { form.idea = e.target.value; } }),
-    el('label', {}, 'اسم المشروع'), el('input', { type: 'text', placeholder: 'اسم يساعدك على إيجاده لاحقًا', oninput: (e) => { form.title = e.target.value; } }),
+    el('h1', {}, 'ماذا نصنع اليوم؟'),
+    el('p', {}, 'اكتبي فكرة الفيديو بالعربية، وسنحلّلها ونقترح مشاهد ونصوصًا وتكوينات خاصة بها، تعدّلينها بعد ذلك بصريًا.'),
+    el('label', {}, 'فكرة الفيديو'), ideaBox, exBox,
+    el('label', {}, 'اسم المشروع (اختياري)'), el('input', { type: 'text', placeholder: 'يساعدك على إيجاده لاحقًا', oninput: (e) => { form.title = e.target.value; } }),
     el('label', {}, 'نوع العمل'), kindChips,
+    el('label', {}, 'المدة التقريبية'), lenChips,
     el('label', {}, 'الألوان'), themeChips,
-    el('div', { style: 'margin-top:18px' }, create));
+    el('label', {}, 'صيغة المخاطبة'), addrChips, llmBox,
+    el('div', { style: 'margin-top:18px;display:flex;gap:10px;flex-wrap:wrap' }, btnPlan, btnTpl));
   const list = el('div', { class: 'projects' });
-  const right = el('div', {}, el('h2', { class: 'section-title' }, 'مشاريعي'), list);
-  app.append(el('div', { class: 'home' }, el('div', { class: 'hero' }, left, right)));
+  app.append(el('div', { class: 'home' }, el('div', { class: 'hero' }, left, el('div', {}, el('h2', { class: 'section-title' }, 'مشاريعي'), list))));
   const projects = await api('/api/projects');
-  if (!projects.length) list.append(el('div', { class: 'empty' }, 'لا مشاريع بعد. ابدئي أول مشروع من اليمين.'));
+  if (!projects.length) list.append(el('div', { class: 'empty' }, 'لا مشاريع بعد. اكتبي أول فكرة من اليمين.'));
   for (const p of projects) {
-    const card = el('div', { class: 'proj', role: 'button', tabindex: 0, onclick: () => { location.hash = '#/p/' + p.id; } },
+    list.append(el('div', { class: 'proj', role: 'button', tabindex: 0, onclick: () => { location.hash = '#/p/' + p.id; } },
       el('h3', {}, p.title), el('div', { class: 'meta' }, `${state.brand.kinds[p.kind]?.label || p.kind} · ${p.scenes} مشاهد${p.duration ? ' · ' + p.duration.toFixed(1) + 'ث' : ''}`),
       el('div', { class: 'meta' }, new Date(p.updated).toLocaleString('ar')),
       p.palette ? el('div', { class: 'sw' }, ['bg', 'accent', 'accent2', 'ink'].map((k) => el('i', { style: `background:${p.palette[k]}` }))) : null,
@@ -83,8 +102,7 @@ async function renderHome() {
         e.stopPropagation();
         if (!confirm(`نقل «${p.title}» إلى المهملات؟`)) return;
         await api('/api/projects/' + p.id, { method: 'DELETE' }); renderHome();
-      } }, '🗑') : null);
-    list.append(card);
+      } }, '🗑') : null));
   }
 }
 
@@ -97,6 +115,7 @@ async function openEditor(id) {
   buildEditorDOM();
   renderAll();
   window.__S = S; // for tests/debug
+  const w = sessionStorage.getItem('mm-warn'); if (w) { sessionStorage.removeItem('mm-warn'); toast(w, 7000); }
   await S.loaded;
   await refreshPreview();
   seekPoster(S.selScene);
@@ -139,6 +158,7 @@ function buildEditorDOM() {
   S.ui.insp = el('div', { class: 'scroll' });
   S.ui.tabs = el('div', { class: 'tabs' },
     el('button', { class: 'tab', 'data-t': 'scene', onclick: () => { S.tab = 'scene'; renderInspector(); markTabs(); } }, 'المشهد والعناصر'),
+    el('button', { class: 'tab', 'data-t': 'plan', onclick: () => { S.tab = 'plan'; renderInspector(); markTabs(); loadPlanData(); } }, 'الخطة'),
     el('button', { class: 'tab', 'data-t': 'project', onclick: () => { S.tab = 'project'; renderInspector(); markTabs(); } }, 'المشروع والوسائط'));
   const inspCol = el('div', { class: 'col' }, S.ui.tabs, S.ui.insp);
   app.append(el('div', { class: 'editor' }, scenesCol, stageCol, inspCol));
@@ -179,6 +199,7 @@ function changed() {
   S.dirty = true; S.ui.save.textContent = 'غير محفوظ…';
   clearTimeout(S.saveT); S.saveT = setTimeout(save, 700);
   clearTimeout(S.prevT); S.prevT = setTimeout(refreshPreview, 140);
+  if (S.tab === 'plan') { clearTimeout(S.planT); S.planT = setTimeout(loadPlanData, 700); }
 }
 async function save() {
   if (!S || S.saving) { if (S) { clearTimeout(S.saveT); S.saveT = setTimeout(save, 400); } return; }
@@ -211,7 +232,7 @@ function renderScenes() {
     const rs = S.res?.scenes?.find((x) => x.id === sc.id);
     box.append(el('div', { class: 'scene-item' + (sc.id === S.selScene ? ' sel' : ''), 'data-id': sc.id, onclick: () => selectScene(sc.id) },
       el('span', { class: 'n' }, i + 1),
-      el('div', { class: 't' }, el('b', {}, sc.title || 'مشهد ' + (i + 1)), el('small', {}, `${(rs?.duration ?? sc.duration ?? 0).toFixed(1)}ث · ${sc.layers.length} عناصر`))));
+      el('div', { class: 't' }, el('b', {}, sc.title || 'مشهد ' + (i + 1)), el('small', {}, `${(rs?.duration ?? sc.duration ?? 0).toFixed(1)}ث · ${sc.layers.length} عناصر`), sc.plan ? el('small', { style: 'display:block;color:var(--red);font-weight:700' }, state.brand.compositions?.[sc.plan.composition] || sc.plan.composition) : null)));
   });
   box.append(el('div', { class: 'row-actions' },
     el('button', { class: 'btn sm', onclick: dupScene }, 'نسخ'),
@@ -276,6 +297,9 @@ const LAYER_DEFAULTS = {
   sparkles: () => ({ type: 'sparkles', seed: rnd(), count: 12, at: 0.5 }),
   art: () => { const style = 'lattice'; return { type: 'art', style, seed: freshSeed(style) }; },
   bgtext: () => ({ type: 'bgtext', text: 'ذكريات', rows: 3, size: 420, y: 300, opacity: 0.12, speed: 60 }),
+  book: () => ({ type: 'book', variant: 'closed', cover: 'milk', w: 480, x: 300, y: 320, seed: rnd() % 90 + 1, at: 0.3 }),
+  prints: () => ({ type: 'prints', count: 3, w: 380, x: 100, y: 320, seed: rnd() % 90 + 1, at: 0.3 }),
+  invite: () => ({ type: 'invite', w: 520, x: 270, y: 320, at: 0.3 }),
 };
 function addLayer(type) {
   edit('addlayer', () => { const sc = scene(); sc.layers.push(LAYER_DEFAULTS[type]()); S.selLayer = sc.layers.length - 1; }, { structural: true });
@@ -298,7 +322,7 @@ function layerLabel(l) {
 // ---------- inspector ----------
 function renderInspector() {
   const box = S.ui.insp; const keep = box.scrollTop; box.innerHTML = '';
-  if (S.tab === 'project') renderProjectTab(box); else renderSceneTab(box);
+  if (S.tab === 'project') renderProjectTab(box); else if (S.tab === 'plan') renderPlanTab(box); else renderSceneTab(box);
   box.scrollTop = keep;
 }
 const F = (label, ...ctl) => el('div', { class: 'f' }, el('label', {}, label), el('div', { class: 'inl' }, ...ctl));
@@ -337,6 +361,7 @@ function renderSceneTab(box) {
     F('الاسم', txt(sc, 'title')), F('المدة (ث)', num(sc, 'duration', { step: 0.1, min: 0.5 })),
     idx > 0 ? F('الانتقال', sel(sc.transitionIn ||= { type: 'wipe', dur: 0.55 }, 'type', TRANS_LABELS, 'wipe'), num(sc.transitionIn, 'dur', { step: 0.05, min: 0.2, def: 0.55, key2: 'tdur' })) : null));
 
+  box.append(planGroup(sc));
   const list = el('div', { class: 'grp' }, el('h5', {}, 'عناصر المشهد (الأعلى = الأمام)'));
   [...sc.layers.keys()].reverse().forEach((i) => {
     const l = sc.layers[i];
@@ -369,7 +394,7 @@ function layerEditor(l) {
     return wrapAnim(g, l, 'draw');
   }
   if (l.type === 'polaroid') {
-    g.append(F('الصورة', assetPicker(l)), F('التعليق', txt(l, 'caption')), ...pos(), F('العرض', num(l, 'w', { min: 200, max: 1000, def: 640 })), F('الميلان', num(l, 'rot', { step: 0.5, min: -30, max: 30, def: -4 })), F('شريط لاصق', chk(l, 'tape', true)), F('لون الشريط', colorCtl(l, 'tapeColor', 'accent')));
+    g.append(F('الصورة', assetPicker(l)), l.slot ? F('الغرض', el('small', { style: 'color:var(--muted)' }, (S.planData?.slots?.find((x) => x.key === l.slot)?.desc) || l.slot)) : null, F('إن لم تُرفع صورة', sel(l, 'fallback', { art: 'رسم أصلي', '': 'عبارة «صورتك هنا»' }, l.fallback || '')), F('التعليق', txt(l, 'caption')), ...pos(), F('العرض', num(l, 'w', { min: 200, max: 1000, def: 640 })), F('الميلان', num(l, 'rot', { step: 0.5, min: -30, max: 30, def: -4 })), F('شريط لاصق', chk(l, 'tape', true)), F('لون الشريط', colorCtl(l, 'tapeColor', 'accent')));
     return wrapAnim(g, l, 'settle');
   }
   if (l.type === 'image') {
@@ -380,6 +405,15 @@ function layerEditor(l) {
     g.append(F('النمط', sel(l, 'style', ART_LABELS, 'shards')), F('البذرة', num(l, 'seed', { min: 1 }), el('button', { class: 'btn sm', title: 'تكوين جديد', onclick: () => edit('seed', () => { l.seed = freshSeed(l.style); }, { structural: true }) }, '🎲')));
     return g;
   }
+  if (l.type === 'book') {
+    g.append(F('الشكل', sel(l, 'variant', { closed: 'مغلق (كغلاف)', open: 'مفتوح بصفحات' }, 'closed')), F('الغلاف', sel(l, 'cover', { red: 'أحمر ساتان', milk: 'أبيض حليبي' }, 'red')), ...pos(), F('العرض', num(l, 'w', { min: 200, max: 1000, def: 520 })), F('تنويع الرسم', num(l, 'seed', { min: 1 }), el('button', { class: 'btn sm', onclick: () => edit('seed', () => { l.seed = rnd() % 90 + 1; }, { structural: true }) }, '🎲')));
+    return wrapAnim(g, l, 'settle');
+  }
+  if (l.type === 'prints') {
+    g.append(F('العدد', num(l, 'count', { min: 2, max: 4, def: 3 })), ...pos(), F('عرض الصورة', num(l, 'w', { min: 200, max: 600, def: 420 })), F('تنويع الرسم', num(l, 'seed', { min: 1 }), el('button', { class: 'btn sm', onclick: () => edit('seed', () => { l.seed = rnd() % 90 + 1; }, { structural: true }) }, '🎲')));
+    return wrapAnim(g, l, 'settle');
+  }
+  if (l.type === 'invite') { g.append(...pos(), F('العرض', num(l, 'w', { min: 200, max: 900, def: 520 }))); return wrapAnim(g, l, 'settle'); }
   if (l.type === 'fill') { g.append(F('اللون', colorCtl(l, 'color', 'bg'))); return g; }
   if (l.type === 'rays') {
     g.append(F('اللون', colorCtl(l, 'color', '#FFFFFF')), F('العدد', num(l, 'count', { min: 4, max: 40, step: 2, def: 14 })), F('الشفافية', num(l, 'opacity', { step: 0.05, min: 0.05, max: 1, def: 0.5 })), F('السرعة', num(l, 'speed', { step: 0.5, def: 4 })), F('مركز X', num(l, 'cx')), F('مركز Y', num(l, 'cy')));
@@ -567,6 +601,10 @@ async function startExport(kind) {
   if (kind === 'final' && S.issues.warns.some((w) => w.includes('Polaroid'))) {
     if (!confirm('بعض إطارات Polaroid بلا صورة (مكان فارغ). تصدير نهائي رغم ذلك؟')) return;
   }
+  if (kind === 'final') {
+    const missing = S.spec.scenes.flatMap((sc) => sc.layers.filter((l) => l.type === 'polaroid' && l.slot && !l.asset && l.fallback === 'art'));
+    if (missing.length && !confirm(`${missing.length} صورة مطلوبة لم تُرفع بعد؛ سيُستخدم رسم أصلي بدلًا منها في الفيديو. متابعة التصدير؟`)) return;
+  }
   stopPlay(); await flushSave();
   const bar = S.ui.expbar.querySelector('.bar'); bar.hidden = false; S.ui.progress.style.width = '0';
   S.ui.jobtxt.textContent = 'جارٍ التجهيز…';
@@ -589,4 +627,154 @@ async function startExport(kind) {
       el('div', { class: 'row-actions' }, el('a', { class: 'btn red', href: j.file, download: '' }, 'تنزيل'), el('button', { class: 'btn', onclick: closeModal }, 'إغلاق'))]);
   };
   poll();
+}
+
+// ============ phase 2: plan (idea → scenes), regeneration, slots, audio ============
+const ROLE_AR = () => state.brand.roles || {};
+const hasPlan = () => !!S.spec.meta?.plan;
+let regenBusy = false;
+
+function planGroup(sc) {
+  const g = el('div', { class: 'grp' }, el('h5', {}, 'الخطة الذكية لهذا المشهد'));
+  if (!hasPlan()) { g.append(el('small', { style: 'color:var(--muted)' }, 'هذا المشروع أُنشئ من قالب. افتحي تبويب «الخطة» لتوليد مشاهد من فكرتك.')); return g; }
+  if (sc.plan) {
+    g.append(el('div', { style: 'font-size:13px;margin-bottom:8px' }, el('b', {}, state.brand.compositions?.[sc.plan.composition] || sc.plan.composition), ' — ', el('span', { style: 'color:var(--muted)' }, sc.plan.why || '')));
+    g.append(el('div', { class: 'row-actions', style: 'margin-top:0' },
+      el('button', { class: 'btn sm', disabled: regenBusy, title: 'نص جديد وتكوين جديد لهذا المشهد فقط', onclick: () => regenScene('all') }, '🎲 مشهد جديد'),
+      el('button', { class: 'btn sm', disabled: regenBusy, title: 'نفس التكوين بصياغة مختلفة', onclick: () => regenScene('copy') }, 'نص جديد فقط'),
+      el('button', { class: 'btn sm', disabled: regenBusy, title: 'نفس النص بتكوين مختلف', onclick: () => regenScene('layout') }, 'تكوين جديد فقط')));
+  } else g.append(el('small', { style: 'color:var(--muted)' }, 'مشهد يدوي (بلا خطة) — يمكن إضافة مشاهد ذكية بعده.'));
+  const roles = ['feature', 'emotion', 'reveal', 'steps', 'occasion', 'offer', 'cta'];
+  const add = el('select', { onchange: (e) => { if (e.target.value) addSmartScene(e.target.value); e.target.value = ''; } }, el('option', { value: '' }, '+ إضافة مشهد ذكي بعد هذا…'), ...roles.map((r) => el('option', { value: r }, ROLE_AR()[r] || r)));
+  g.append(el('div', { style: 'margin-top:8px' }, add));
+  return g;
+}
+
+async function planCall(op, body) {
+  return api(`/api/projects/${S.id}/plan/${op}`, { method: 'POST', body: { spec: S.spec, ...body } });
+}
+async function regenScene(mode) {
+  if (regenBusy) return; regenBusy = true; stopPlay();
+  const id = S.selScene;
+  try {
+    const r = await planCall('scene', { sceneId: id, mode });
+    edit('regen' + Date.now(), () => {
+      const i = S.spec.scenes.findIndex((s) => s.id === id);
+      S.spec.scenes[i] = r.scene; S.spec.meta.plan = r.plan; S.selLayer = null;
+    }, { structural: true });
+    toast({ all: 'وُلّد مشهد جديد — بقية المشاهد كما هي (Ctrl+Z للتراجع)', copy: 'صياغة جديدة للمشهد', layout: 'تكوين جديد للمشهد' }[mode]);
+    seekPoster(id); loadPlanData();
+  } catch (e) { toast(e.message); }
+  regenBusy = false; renderInspector();
+}
+async function addSmartScene(role) {
+  if (regenBusy) return; regenBusy = true; stopPlay();
+  try {
+    const r = await planCall('scene', { mode: 'new', role, afterId: S.selScene });
+    edit('addsmart' + Date.now(), () => { S.spec.scenes.splice(r.index, 0, r.scene); S.spec.meta.plan = r.plan; S.selScene = r.scene.id; S.selLayer = null; }, { structural: true });
+    toast('أُضيف مشهد «' + (ROLE_AR()[role] || role) + '»'); seekPoster(r.scene.id); loadPlanData();
+  } catch (e) { toast(e.message); }
+  regenBusy = false; renderInspector();
+}
+async function regenAll(opts = {}) {
+  if (regenBusy) return;
+  if (!confirm('سيُستبدل مخطط المشاهد كله بخطة جديدة من الفكرة (الصور المرفوعة تُوزَّع من جديد). يمكنك التراجع بـ Ctrl+Z. متابعة؟')) return;
+  regenBusy = true; stopPlay(); S.ui.save.textContent = 'جارٍ التحليل…';
+  try {
+    const r = await planCall('all', opts);
+    edit('regenall' + Date.now(), () => { S.spec.scenes = r.scenes; S.spec.meta.plan = r.plan; S.selScene = r.scenes[0].id; S.selLayer = null; }, { structural: true });
+    if (r.warning) toast(r.warning, 6000); else toast('وُلّدت خطة جديدة');
+    seekPoster(S.selScene); loadPlanData();
+  } catch (e) { toast(e.message); }
+  regenBusy = false; renderInspector();
+}
+
+async function loadPlanData() {
+  if (!S) return;
+  const my = (S.planSeq = (S.planSeq || 0) + 1);
+  try {
+    const [d, st] = await Promise.all([planCall('audio', {}), S.status ? Promise.resolve(S.status) : api('/api/planner/status')]);
+    if (!S || my !== S.planSeq) return;
+    S.planData = d; S.status = st;
+    if (S.tab === 'plan' && !S.ui.insp.contains(document.activeElement)) renderInspector();
+  } catch (e) { /* plan tab shows its own empty state */ }
+}
+
+const findSlotLayer = (key) => { for (const sc of S.spec.scenes) for (const l of sc.layers) if (l.slot === key) return l; return null; };
+function copyText(t) { navigator.clipboard?.writeText(t).then(() => toast('نُسخ'), () => toast('تعذّر النسخ')); }
+
+function renderPlanTab(box) {
+  const plan = S.spec.meta?.plan;
+  const opts = { address: plan?.address || 'f', seconds: plan?.seconds || 26, useLLM: false };
+  const idea = txt(S.spec.meta ||= {}, 'idea', { area: true, placeholder: 'اكتبي فكرة الإعلان…' });
+  const llm = S.status?.llm;
+  const gen = el('div', { class: 'grp' }, el('h5', {}, 'الفكرة'), idea,
+    F('المخاطبة', el('select', { onchange: (e) => { opts.address = e.target.value; } }, el('option', { value: 'f', ...(opts.address === 'f' ? { selected: true } : {}) }, 'مؤنث'), el('option', { value: 'm', ...(opts.address === 'm' ? { selected: true } : {}) }, 'مذكر'))),
+    F('المدة ≈', el('select', { onchange: (e) => { opts.seconds = Number(e.target.value); } }, [16, 26, 32].map((v) => el('option', { value: v, ...(opts.seconds === v ? { selected: true } : {}) }, v + ' ثانية')))),
+    llm?.configured ? el('label', { style: 'display:flex;gap:6px;font-size:13px' }, el('input', { type: 'checkbox', onchange: (e) => { opts.useLLM = e.target.checked; } }), 'صياغة بـ Claude (لم تُختبر حيًا)') : null,
+    el('div', { style: 'margin-top:8px' }, el('button', { class: 'btn red sm', disabled: regenBusy, onclick: () => regenAll({ idea: S.spec.meta.idea, ...opts }) }, plan ? '🎲 أعيدي توليد الخطة كلها' : 'حلّلي الفكرة وأنشئي مشاهد')));
+  box.append(gen);
+  if (!plan) { box.append(el('div', { class: 'empty' }, 'لم تُولَّد خطة لهذا المشروع بعد.')); }
+  else {
+    box.append(el('div', { class: 'grp' }, el('h5', {}, 'فهمتُ من فكرتك'),
+      el('div', { class: 'chips' }, (plan.analysis?.summary || []).map((x) => el('span', { class: 'chip', style: 'cursor:default' }, `${x.k}: ${x.v}`))),
+      el('small', { style: 'color:var(--muted);display:block;margin-top:6px' }, plan.source === 'llm' ? 'صياغة Claude + تكوين محلي' : 'تحليل وصياغة محليان (بلا خدمات خارجية)')));
+    const tl = el('div', { class: 'grp' }, el('h5', {}, `مخطط المشاهد (${S.spec.scenes.length})`));
+    S.spec.scenes.forEach((sc, i) => tl.append(el('div', { class: 'layer-item' + (sc.id === S.selScene ? ' sel' : ''), onclick: () => { selectScene(sc.id); S.tab = 'plan'; renderInspector(); markTabs(); } },
+      el('span', { class: 'ty' }, i + 1), el('span', { class: 'lb' }, `${sc.title} · ${state.brand.compositions?.[sc.plan?.composition] || 'يدوي'}`),
+      el('small', { style: 'color:var(--muted)' }, `${sc.duration}ث · ${TRANS_LABELS[sc.transitionIn?.type] || '—'}`))));
+    box.append(tl);
+  }
+  if (!S.planData) { box.append(el('div', { class: 'empty' }, 'جارٍ تجهيز الصور المطلوبة والصوت…')); return; }
+
+  // image slots
+  const slots = S.planData.slots || [];
+  const sg = el('div', { class: 'grp' }, el('h5', {}, `الصور المطلوبة (${slots.length})`),
+    el('small', { style: 'color:var(--muted);display:block;margin-bottom:8px' }, 'ارفعي صور منتجاتك الحقيقية وضعيها هنا؛ إلى ذلك الحين يُرسم بدلًا منها تصميم أصلي (ليست صورًا مولّدة).'));
+  if (!slots.length) sg.append(el('div', { class: 'empty' }, 'لا صور مطلوبة في هذه الخطة.'));
+  const assetsSel = (cur, onPick) => el('select', { onchange: (e) => onPick(e.target.value || null) }, el('option', { value: '' }, '— رسم أصلي —'), ...Object.entries(S.assets).filter(([, a]) => a.type === 'image').map(([id]) => el('option', { value: id, ...(cur === id ? { selected: true } : {}) }, id)));
+  for (const sl of slots) {
+    const file = el('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', hidden: true, onchange: async (e) => { const id = await uploadFile(e.target.files[0]); if (id) assign(sl.key, id); } });
+    const providers = S.status?.imagegen?.providers || [];
+    const aiOk = providers.some((p) => p.configured);
+    sg.append(el('div', { class: 'grp', style: 'margin-bottom:8px;background:#fff' },
+      el('div', { style: 'font-weight:800;font-size:13px' }, `${sl.sceneTitle} — ${sl.desc}`),
+      el('div', { style: 'margin:6px 0' }, assetsSel(sl.asset, (v) => assign(sl.key, v))),
+      el('div', { class: 'row-actions', style: 'margin-top:4px' },
+        el('button', { class: 'btn sm', onclick: () => file.click() }, '⬆ رفع صورة'), file,
+        el('button', { class: 'btn sm', title: 'يُنسخ وصف جاهز لأي أداة توليد صور', onclick: () => copyText(sl.promptEn + '\n\n' + sl.prompt) }, 'نسخ الوصف'),
+        el('button', { class: 'btn sm', title: aiOk ? 'توليد عبر الخدمة المربوطة' : 'لا توجد خدمة توليد صور مربوطة بعد', onclick: () => genImage(sl) }, '✨ توليد بالذكاء الاصطناعي' + (aiOk ? '' : ' (غير متصل)')))));
+  }
+  box.append(sg);
+
+  // audio
+  const au = S.planData.audio;
+  const vg = el('div', { class: 'grp' }, el('h5', {}, 'التعليق الصوتي المقترح'),
+    el('small', { style: 'color:var(--muted);display:block;margin-bottom:6px' }, `${au.voiceover.words} كلمة ≈ ${au.voiceover.seconds}ث لفيديو ${au.voiceover.videoSeconds}ث. اقتراح نصي فقط، لم يُولَّد صوت.`));
+  au.voiceover.lines.forEach((l) => vg.append(el('div', { style: 'font-size:13px;margin-bottom:4px' }, el('span', { style: 'color:var(--muted)' }, `${l.start}ث · `), l.text, l.fits ? '' : el('b', { style: 'color:var(--red)' }, ' ⚠ أطول من مدة المشهد'))));
+  vg.append(el('div', { class: 'row-actions' }, el('button', { class: 'btn sm', onclick: () => copyText(au.voiceover.script) }, 'نسخ النص كاملًا')));
+  box.append(vg);
+  box.append(el('div', { class: 'grp' }, el('h5', {}, 'الموسيقى'), el('div', { style: 'font-size:13px' }, `${au.music.mood} — ${au.music.bpm} BPM`), el('small', { style: 'color:var(--muted)' }, `${au.music.suggestion}. ${au.music.duck}.`)));
+  const sx = el('div', { class: 'grp' }, el('h5', {}, `المؤثرات الصوتية المقترحة (${au.sfx.length})`));
+  au.sfx.forEach((c) => sx.append(el('div', { style: 'font-size:12px;color:var(--muted)' }, `${c.at}ث · ${c.type} — ${c.note}`)));
+  box.append(sx);
+
+  // services
+  const st = S.status;
+  box.append(el('div', { class: 'grp' }, el('h5', {}, 'حالة الخدمات'),
+    el('div', { style: 'font-size:13px' }, '• المخطِّط المحلي: يعمل'),
+    el('div', { style: 'font-size:13px' }, st?.llm?.configured ? `• Claude (${st.llm.model}): مفعّل بمفتاح البيئة — لم يُختبر حيًا في التطوير` : '• Claude: غير مفعّل (يحتاج ANTHROPIC_API_KEY)'),
+    el('div', { style: 'font-size:13px' }, (st?.imagegen?.providers || []).length ? `• توليد الصور: ${(st.imagegen.providers).map((p) => p.label + (p.configured ? ' (مفعّل)' : ' (بلا مفتاح)')).join('، ')}` : '• توليد الصور بالذكاء الاصطناعي: لا خدمة مربوطة (الصور من رفعك أو رسوم أصلية)')));
+}
+
+function assign(key, assetId) {
+  const l = findSlotLayer(key); if (!l) return toast('تعذّر العثور على الصورة في المشاهد');
+  edit('slot' + key, () => { if (assetId) l.asset = assetId; else delete l.asset; }, { structural: true });
+  loadPlanData();
+}
+async function genImage(sl) {
+  try {
+    const r = await api(`/api/projects/${S.id}/imagegen`, { method: 'POST', body: { prompt: sl.prompt, promptEn: sl.promptEn, slot: sl.key } });
+    S.assets[r.assetId] = r.asset; assign(sl.key, r.assetId); toast('وُلّدت الصورة');
+  } catch (e) { toast(e.message, 5000); }
 }

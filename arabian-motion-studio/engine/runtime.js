@@ -161,6 +161,94 @@
     return { svg, groups: [...svg.querySelectorAll('[data-g]')].map((el, i) => ({ el, ...groups[i] })) };
   }
 
+  // ---------- original vector illustrations (no stock photos needed) ----------
+  // Abstract "photo" art: sharp-edged motifs, seeded → every print/page looks different.
+  function motifSvg(seed, w, h, pal) {
+    const R = rng(seed || 1);
+    const kinds = ['hills', 'heart', 'diamonds', 'sunrise', 'stripes'];
+    const k = kinds[Math.floor(R() * kinds.length)];
+    const bgs = [pal.accent2, '#FBE3D6', '#F3C4C8', '#FFE9D0', '#F6D9D2'];
+    const bg = bgs[Math.floor(R() * bgs.length)], a = pal.accent, a2 = '#8E0B20';
+    let s = `<rect width="${w}" height="${h}" fill="${bg}"/>`;
+    if (k === 'hills') {
+      s += `<circle cx="${w * (0.25 + R() * 0.5)}" cy="${h * 0.3}" r="${w * 0.12}" fill="${a}" opacity=".9"/>`;
+      for (let i = 0; i < 3; i++) { const x0 = -w * 0.2 + i * w * 0.3 + R() * w * 0.1; s += `<polygon points="${x0},${h} ${x0 + w * 0.45},${h * (0.45 + i * 0.1)} ${x0 + w * 0.9},${h}" fill="${i % 2 ? a2 : a}" opacity="${0.3 + i * 0.25}"/>`; }
+    } else if (k === 'heart') {
+      const cx = w / 2, cy = h * 0.52, q = Math.min(w, h) * 0.3;
+      s += `<polygon points="${cx},${cy + q} ${cx - q * 1.15},${cy - q * 0.1} ${cx - q * 0.62},${cy - q * 0.72} ${cx},${cy - q * 0.34} ${cx + q * 0.62},${cy - q * 0.72} ${cx + q * 1.15},${cy - q * 0.1}" fill="${a}"/>`;
+      s += `<polygon points="${cx},${cy + q} ${cx + q * 1.15},${cy - q * 0.1} ${cx + q * 0.62},${cy - q * 0.72} ${cx},${cy - q * 0.34}" fill="${a2}" opacity=".45"/>`;
+    } else if (k === 'diamonds') {
+      for (let i = 0; i < 7; i++) { const cx = R() * w, cy = R() * h, r = w * (0.08 + R() * 0.16); s += `<polygon points="${cx},${cy - r} ${cx + r * 0.7},${cy} ${cx},${cy + r} ${cx - r * 0.7},${cy}" fill="${i % 2 ? a : a2}" opacity="${0.25 + R() * 0.5}"/>`; }
+    } else if (k === 'sunrise') {
+      const cx = w / 2, cy = h * 0.8;
+      for (let i = 0; i < 9; i++) { const a0 = Math.PI + (i / 9) * Math.PI, a1 = a0 + (Math.PI / 9) * 0.55, r = w; s += `<polygon points="${cx},${cy} ${cx + Math.cos(a0) * r},${cy + Math.sin(a0) * r} ${cx + Math.cos(a1) * r},${cy + Math.sin(a1) * r}" fill="${a}" opacity=".35"/>`; }
+      s += `<polygon points="${cx - w * 0.16},${cy} ${cx},${cy - w * 0.16} ${cx + w * 0.16},${cy}" fill="${a}"/>`;
+    } else {
+      for (let i = -2; i < 8; i++) s += `<polygon points="${i * w * 0.22},${h} ${i * w * 0.22 + w * 0.1},${h} ${i * w * 0.22 + w * 0.5},0 ${i * w * 0.22 + w * 0.4},0" fill="${i % 2 ? a : a2}" opacity="${0.18 + R() * 0.3}"/>`;
+    }
+    return s;
+  }
+  const SATIN = (id, c0, c1, c2) => `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${c0}"/><stop offset=".45" stop-color="${c2}"/><stop offset="1" stop-color="${c1}"/></linearGradient>`;
+  const bars = (x, y, w, n, gap, h, col, op = 0.5) => Array.from({ length: n }, (_, i) => `<rect x="${x}" y="${y + i * gap}" width="${i === n - 1 ? w * 0.6 : w}" height="${h}" fill="${col}" opacity="${op}"/>`).join('');
+
+  function bookSvg(L, pal, uid) {
+    const W = L.w || 520, H = W * 1.32, ch = W * 0.09;
+    const cover = L.cover === 'milk' ? ['#FFFDF9', '#EAD7CC', '#FFFFFF'] : ['#8E0B20', '#C8102E', '#E2354F'];
+    const ink = L.cover === 'milk' ? '#C8102E' : '#FFFDF9';
+    if (L.variant === 'open') {
+      const OW = L.w || 820, OH = OW * 0.62, m = OW / 2;
+      const page = (side) => { // side: -1 = left page, +1 = right page
+        const x0 = side < 0 ? 0 : m, x1 = side < 0 ? m : OW;
+        const g = (x, y, w, h, sd) => `<g transform="translate(${x} ${y})"><clipPath id="${uid}c${sd}"><rect width="${w}" height="${h}"/></clipPath><g clip-path="url(#${uid}c${sd})">${motifSvg((L.seed || 1) * 7 + sd, w, h, pal)}</g><rect width="${w}" height="${h}" fill="none" stroke="#FFFDF9" stroke-width="6"/></g>`;
+        const px = side < 0 ? OW * 0.07 : m + OW * 0.07, pw = m - OW * 0.14;
+        const content = side < 0
+          ? g(px, OH * 0.12, pw, OH * 0.36, 1) + g(px, OH * 0.52, pw * 0.62, OH * 0.3, 2) + bars(px + pw * 0.66, OH * 0.56, pw * 0.34, 4, OH * 0.055, 6, '#8A5A60', 0.45)
+          : g(px, OH * 0.1, pw, OH * 0.58, 3) + bars(px, OH * 0.74, pw, 3, OH * 0.06, 6, '#8A5A60', 0.45) + `<polygon points="${px + pw * 0.86},${OH * 0.76} ${px + pw},${OH * 0.8} ${px + pw * 0.86},${OH * 0.86} ${px + pw * 0.72},${OH * 0.8}" fill="${pal.accent}"/>`;
+        return `<g transform="skewY(${side < 0 ? -3 : 3}) translate(0 ${side < 0 ? OW * 0.026 : -OW * 0.026})"><polygon points="${x0},${OH * 0.04} ${x1},0 ${x1},${OH * 0.97} ${x0},${OH}" fill="#FFFDF9" stroke="#E7D3C8" stroke-width="2"/>${content}</g>`;
+      };
+      return { w: OW, h: OH + OW * 0.07, svg: `<defs>${SATIN(uid + 'g', cover[0], cover[1], cover[2])}<linearGradient id="${uid}s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#E7D3C8"/><stop offset=".5" stop-color="#B89C90"/><stop offset="1" stop-color="#E7D3C8"/></linearGradient></defs>` +
+        `<polygon points="${-OW * 0.02},${OH * 0.07} ${OW * 1.02},${OH * 0.02} ${OW * 1.02},${OH * 1.05} ${-OW * 0.02},${OH * 1.09}" fill="#2A0208" opacity=".25" transform="translate(${OW * 0.02} ${OW * 0.03})"/>` +
+        `<polygon points="${-OW * 0.02},${OH * 0.03} ${OW * 1.02},${OH * -0.02} ${OW * 1.02},${OH * 1.03} ${-OW * 0.02},${OH * 1.06}" fill="url(#${uid}g)"/>` +
+        page(-1) + page(1) + `<rect x="${m - 6}" y="0" width="12" height="${OH}" fill="url(#${uid}s)" opacity=".7"/>` +
+        `<polygon points="${m + OW * 0.1},${OH * 0.01} ${m + OW * 0.15},${OH * 0.005} ${m + OW * 0.15},${OH * 1.12} ${m + OW * 0.125},${OH * 1.07} ${m + OW * 0.1},${OH * 1.12}" fill="#C8102E"/>` };
+    }
+    // closed book, spine on the RIGHT (Arabic book)
+    const poly = `0,${ch} ${ch},0 ${W},0 ${W},${H - ch} ${W - ch},${H} 0,${H}`;
+    return { w: W * 1.08, h: H * 1.1, svg: `<defs>${SATIN(uid + 'g', cover[0], cover[1], cover[2])}${SATIN(uid + 'r', '#8E0B20', '#C8102E', '#F2475F')}</defs>` +
+      `<g transform="translate(${W * 0.02} 0)"><polygon points="${poly}" transform="translate(${W * 0.045} ${W * 0.05})" fill="#2A0208" opacity=".28"/>` +
+      `<polygon points="${-W * 0.035},${ch + W * 0.03} ${ch - W * 0.02},${W * 0.03} ${W * 0.95},${W * 0.03} ${W * 0.95},${H + W * 0.03} ${-W * 0.035},${H + W * 0.03}" fill="#FFFDF9" stroke="#E0C9BD" stroke-width="2"/>` +
+      `<polygon points="${poly}" fill="url(#${uid}g)"/><rect x="${W * 0.84}" y="0" width="${W * 0.16}" height="${H - ch}" fill="#000" opacity=".2"/>` +
+      `<polygon points="0,${ch} ${ch},0 ${W * 0.55},0 ${W * 0.2},${H}" fill="#fff" opacity=".1"/>` +
+      `<g transform="translate(${W * 0.16} ${H * 0.13})"><rect width="${W * 0.52}" height="${H * 0.4}" fill="#FFFDF9"/><clipPath id="${uid}m"><rect x="${W * 0.03}" y="${W * 0.03}" width="${W * 0.46}" height="${H * 0.4 - W * 0.12}"/></clipPath><g clip-path="url(#${uid}m)" transform="translate(${W * 0.03} ${W * 0.03})">${motifSvg(L.seed || 3, W * 0.46, H * 0.4 - W * 0.12, pal)}</g></g>` +
+      bars(W * 0.2, H * 0.6, W * 0.44, 3, H * 0.045, 7, ink, 0.8) +
+      `<rect x="${W * 0.7}" y="0" width="${W * 0.07}" height="${H}" fill="url(#${uid}r)" transform="translate(0 ${-0})"/>` +
+      `<polygon points="${W * 0.7},${H - ch} ${W * 0.77},${H - ch} ${W * 0.77},${H + W * 0.16} ${W * 0.735},${H + W * 0.11} ${W * 0.7},${H + W * 0.16}" fill="url(#${uid}r)"/></g>` };
+  }
+
+  function printsSvg(L, pal, uid) {
+    const n = L.count || 3, pw = L.w || 420, ph = pw * 1.18, tot = { w: pw * (1 + 0.55 * (n - 1)) + 80, h: ph + 120 };
+    let s = '';
+    for (let i = 0; i < n; i++) {
+      const rot = (i - (n - 1) / 2) * 9 + ((L.seed || 1) % 3 - 1) * 2, x = 40 + i * pw * 0.55, y = 50 + Math.abs(i - (n - 1) / 2) * 26;
+      s += `<g transform="translate(${x} ${y}) rotate(${rot} ${pw / 2} ${ph / 2})"><rect x="${pw * 0.03}" y="${pw * 0.04}" width="${pw}" height="${ph}" fill="#2A0208" opacity=".22"/><rect width="${pw}" height="${ph}" fill="#FFFDF9"/>` +
+        `<clipPath id="${uid}p${i}"><rect x="${pw * 0.06}" y="${pw * 0.06}" width="${pw * 0.88}" height="${ph * 0.78}"/></clipPath><g clip-path="url(#${uid}p${i})" transform="translate(${pw * 0.06} ${pw * 0.06})">${motifSvg((L.seed || 1) * 13 + i * 5, pw * 0.88, ph * 0.78, pal)}</g></g>`;
+    }
+    return { w: tot.w, h: tot.h, svg: s };
+  }
+
+  function inviteSvg(L, pal, uid) {
+    const W = L.w || 520, H = W * 1.4, ch = W * 0.1;
+    const poly = `0,${ch} ${ch},0 ${W - ch},0 ${W},${ch} ${W},${H - ch} ${W - ch},${H} ${ch},${H} 0,${H - ch}`;
+    return { w: W * 1.08, h: H * 1.06, svg: `<defs>${SATIN(uid + 'r', '#8E0B20', '#C8102E', '#F2475F')}</defs>` +
+      `<polygon points="${W * 0.05},${H * 0.12} ${W / 2},${H * 0.42} ${W * 0.95},${H * 0.12} ${W * 0.95},${H * 0.98} ${W * 0.05},${H * 0.98}" fill="${pal.accent2}" transform="translate(${W * 0.03} ${W * 0.04})"/>` +
+      `<polygon points="${poly}" fill="#2A0208" opacity=".22" transform="translate(${W * 0.04} ${W * 0.05})"/><polygon points="${poly}" fill="#FFFDF9"/>` +
+      `<polygon points="${ch + 14},${ch + 22} ${ch + 22},${ch + 14} ${W - ch - 22},${ch + 14} ${W - ch - 14},${ch + 22} ${W - ch - 14},${H - ch - 22} ${W - ch - 22},${H - ch - 14} ${ch + 22},${H - ch - 14} ${ch + 14},${H - ch - 22}" fill="none" stroke="${pal.accent}" stroke-width="3"/>` +
+      `<polygon points="${W / 2},${H * 0.16} ${W * 0.62},${H * 0.23} ${W / 2},${H * 0.36} ${W * 0.38},${H * 0.23}" fill="${pal.accent}"/>` +
+      bars(W * 0.22, H * 0.46, W * 0.56, 1, 0, 16, pal.ink, 0.85) + bars(W * 0.28, H * 0.54, W * 0.44, 4, H * 0.045, 7, pal.muted, 0.5) +
+      `<rect x="${W * 0.66}" y="0" width="${W * 0.08}" height="${H}" fill="url(#${uid}r)"/>` +
+      `<polygon points="${W * 0.66},${H} ${W * 0.74},${H} ${W * 0.74},${H + W * 0.12} ${W * 0.70},${H + W * 0.07} ${W * 0.66},${H + W * 0.12}" fill="url(#${uid}r)"/>` };
+  }
+
   // ---------- layer builders ----------
   function buildLayer(L, sceneEl, scene) {
     const pal = PROJECT.palette;
@@ -426,6 +514,10 @@
         if (L.filter) img.style.filter = L.filter;
         img.src = L.src; pending.push(img.decode().catch(() => {}));
         ph.appendChild(img);
+      } else if (L.fallback === 'art') {
+        ph.dataset.illustration = '1';
+        const pwid = w * 0.89, phei = w * 1.16 * 0.767;
+        ph.innerHTML = `<svg width="${pwid}" height="${phei}" viewBox="0 0 ${pwid} ${phei}" style="display:block">${motifSvg(L.motifSeed || (L.x || 1) + (L.y || 1), pwid, phei, pal)}</svg>`;
       } else {
         ph.dataset.placeholder = '1';
         ph.style.background = `repeating-linear-gradient(45deg, ${pal.accent2} 0 22px, ${pal.bg} 22px 44px)`;
@@ -454,6 +546,13 @@
         if (img && kb) { const q = clamp(local / (scene.duration || 1)); img.style.transform = `scale(${(kb.from ?? 1) + ((kb.to ?? 1.1) - (kb.from ?? 1)) * q})`; }
         apply(el, layerState(L, local, 'settle'));
       };
+    } else if (L.type === 'book' || L.type === 'prints' || L.type === 'invite') {
+      const uid = `il_${scene.id}_${L._index}_`;
+      const d = L.type === 'book' ? bookSvg(L, pal, uid) : L.type === 'prints' ? printsSvg(L, pal, uid) : inviteSvg(L, pal, uid);
+      el.style.width = d.w + 'px'; el.style.height = d.h + 'px';
+      el.innerHTML = `<svg width="${d.w}" height="${d.h}" viewBox="0 0 ${d.w} ${d.h}" style="overflow:visible">${d.svg}</svg>`;
+      if (L.rot) el.style.transformOrigin = '50% 50%';
+      inst.update = (local) => { const st = layerState(L, local, 'settle'); if (L.rot) st.r += L.rot; apply(el, st); };
     } else {
       throw new Error('unknown layer type: ' + L.type);
     }
@@ -466,7 +565,7 @@
     el.style.clipPath = 'none'; el.style.opacity = '1'; el.style.transform = 'none';
     const prev = scenes[i - 1];
     if (prev) prev.el.style.transform = 'none';
-    sc.band.style.display = 'none';
+    sc.band.style.display = 'none'; sc.band.style.background = PROJECT.palette.accent;
     if (!T || T.type === 'none') return;
     const p = clamp((t - sc.start) / T.dur);
     if (p >= 1) return;
@@ -478,6 +577,14 @@
       const bw = 5;
       sc.band.style.display = 'block';
       sc.band.style.clipPath = `polygon(${xt - bw}% 0, ${xt}% 0, ${xb}% 100%, ${xb - bw}% 100%)`;
+    } else if (T.type === 'satin') {
+      const s2 = 30, xt = (100 + s2) * (1 - e), xb = xt - s2, bw = 14;
+      el.style.clipPath = `polygon(${xt}% 0, 101% 0, 101% 100%, ${xb}% 100%)`;
+      sc.band.style.display = 'block';
+      sc.band.style.background = 'linear-gradient(90deg,#6E0A18,#C8102E 35%,#F2475F 55%,#C8102E 75%,#6E0A18)';
+      sc.band.style.clipPath = `polygon(${xt - bw}% 0, ${xt}% 0, ${xb}% 100%, ${xb - bw}% 100%)`;
+    } else if (T.type === 'iris') {
+      el.style.clipPath = `circle(${(e * Math.hypot(W, H) * 0.56).toFixed(1)}px at 50% 46%)`;
     } else if (T.type === 'slide') {
       el.style.transform = `translateX(${(1 - e) * W}px)`;
       if (prev) prev.el.style.transform = `translateX(${-e * W * 0.25}px)`;

@@ -24,11 +24,12 @@ export function validate(P) {
       if (L.type === 'image' || L.type === 'video') dup(seen.asset, L.asset, where, 'asset');
       if (L.type === 'polaroid') {
         if (L.asset) dup(seen.asset, L.asset, where, 'asset');
+        else if (L.fallback === 'art') Wn(`${where}: الصورة المطلوبة «${L.slot || 'Polaroid'}» غير مرفوعة — يُستخدم رسم أصلي بدلًا منها`);
         else Wn(`${where}: إطار Polaroid بلا صورة (placeholder) — ضع صورة حقيقية قبل التصدير النهائي`);
       }
       if (L.type === 'text') {
         dup(seen.text, L.text.replace(/\*/g, '').trim(), where, 'text');
-        if (!hasArabic(L.text) && !/[A-Za-z]/.test(L.text)) Wn(`${where}: text has no letters`);
+        if (!hasArabic(L.text) && !/[A-Za-z0-9]/.test(L.text)) Wn(`${where}: text has no letters`);
         const size = L.size || 90, y = L.y ?? 0, w = L.w ?? 900, x = L.x ?? 0;
         if (y < 220) Wn(`${where}: text starts at y=${y} — inside top 220px platform UI zone`);
         const lines = Math.ceil((L.text.length * size * 0.5) / w);

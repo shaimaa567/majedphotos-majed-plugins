@@ -11,7 +11,11 @@ import { ROOT, FONT_DIR, loadProject, readJson } from '../src/project.mjs';
 import { validate } from '../src/validate.mjs';
 import { prepVideoLayers } from '../src/render.mjs';
 import { BRAND, KINDS, buildProject } from './templates.mjs';
+import { planProject, replanScene, buildAudio, collectSlots, storyFor, COMPOSITIONS, ROLE_LABELS } from './planner/index.mjs';
+import { llmBrief, llmStatus } from './planner/llm.mjs';
+import { listProviders, generateForProject, NotConfiguredError } from './imagegen/index.mjs';
 
+try { process.loadEnvFile(path.join(ROOT, '.env')); } catch { /* .env is optional */ }
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const UI = path.join(HERE, 'ui');
 const PROJECTS = path.join(ROOT, 'projects');
@@ -112,7 +116,8 @@ async function api(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // after 'api'
   const m = req.method;
 
-  if (parts[0] === 'brand' && m === 'GET') return send(res, 200, { brand: BRAND, kinds: KINDS });
+  if (parts[0] === 'brand' && m === 'GET') return send(res, 200, { brand: BRAND, kinds: KINDS, roles: ROLE_LABELS, compositions: Object.fromEntries(Object.values(COMPOSITIONS).map((c) => [c.id, c.label])) });
+  if (parts[0] === 'planner' && parts[1] === 'status' && m === 'GET') return send(res, 200, { local: { available: true }, llm: llmStatus(), imagegen: { providers: await listProviders() } });
 
   if (parts[0] === 'projects' && parts.length === 1) {
     if (m === 'GET') return send(res, 200, listProjects());
@@ -122,11 +127,25 @@ async function api(req, res, url) {
       if (!KINDS[kind]?.ready) return fail(res, 400, 'هذا النوع يُضاف في مرحلة لاحقة');
       const id = 'mm-' + new Date().toISOString().replace(/\D/g, '').slice(2, 12) + '-' + crypto.randomBytes(2).toString('hex');
       const dir = path.join(PROJECTS, id);
-      const spec = buildProject({ name: id, title: String(b.title || 'مشروع جديد').slice(0, 80), kind, theme: b.theme === 'wine' ? 'wine' : 'milk', idea: String(b.idea || '').slice(0, 4000) });
+      const theme = b.theme === 'wine' ? 'wine' : 'milk';
+      const title = String(b.title || '').trim().slice(0, 80);
+      const idea = String(b.idea || '').slice(0, 4000);
+      let spec, source = 'template', warning = null;
+      if (b.mode === 'template' || !idea.trim()) {
+        spec = buildProject({ name: id, title: title || 'مشروع جديد', kind, theme, idea });
+      } else {
+        const opts = { idea, kind, theme, address: b.address === 'm' ? 'm' : 'f', seconds: Math.max(12, Math.min(45, Number(b.seconds) || 26)), title: title || idea.split(/[\n.،]/)[0].slice(0, 40), name: id };
+        let brief = null;
+        if (b.useLLM) {
+          if (!llmStatus().configured) warning = 'خدمة Claude غير مفعّلة (ANTHROPIC_API_KEY)؛ استُخدم المخطِّط المحلي.';
+          else { try { const st = storyFor(opts); brief = await llmBrief({ idea, analysis: st.analysis, roles: st.roles, address: opts.address }); } catch (e) { warning = 'تعذّر استخدام Claude: ' + e.message + ' — استُخدم المخطِّط المحلي.'; } }
+        }
+        try { spec = planProject({ ...opts, brief, source: brief ? 'llm' : 'local' }).spec; source = brief ? 'llm' : 'local'; } catch (e) { return fail(res, 400, e.message); }
+      }
       for (const d of ['media', 'audio', 'icons']) fs.mkdirSync(path.join(dir, d), { recursive: true });
       writeJsonAtomic(path.join(dir, 'assets.json'), {});
       writeJsonAtomic(path.join(dir, 'project.json'), spec);
-      return send(res, 201, { id });
+      return send(res, 201, { id, source, warning });
     }
   }
 
@@ -178,6 +197,33 @@ async function api(req, res, url) {
       assets[assetId] = { type: 'image', file, source: 'user', credit: 'Ms. Memories', license: 'own', sha256: hash, originalName: name, addedAt: new Date().toISOString().slice(0, 10) };
       writeJsonAtomic(reg, assets);
       return send(res, 201, { assetId, asset: assets[assetId] });
+    }
+    if (sub === 'plan' && m === 'POST') {
+      const kindOp = parts[3];
+      const b = await readJsonBody(req);
+      const spec = b.spec;
+      if (!spec?.scenes) return fail(res, 400, 'مسودة المشروع مفقودة');
+      const assets = readJson(path.join(dir, 'assets.json'), {});
+      try {
+        if (kindOp === 'scene') return send(res, 200, replanScene({ spec, sceneId: b.sceneId, mode: b.mode || 'all', role: b.role, afterId: b.afterId, assets }));
+        if (kindOp === 'all') {
+          const meta = spec.meta || {}, plan = meta.plan || {};
+          const idea = String(b.idea ?? meta.idea ?? '');
+          const opts = { idea, kind: meta.kind || 'reel', theme: meta.theme === 'wine' ? 'wine' : 'milk', address: b.address || plan.address || 'f', seconds: Number(b.seconds) || plan.seconds || 26, seed: crypto.randomBytes(4).readUInt32LE(), title: meta.title, name: id, assets };
+          let brief = null, warning = null;
+          if (b.useLLM && llmStatus().configured) { try { const st = storyFor(opts); brief = await llmBrief({ idea, analysis: st.analysis, roles: st.roles, address: opts.address }); } catch (e) { warning = 'تعذّر استخدام Claude: ' + e.message; } }
+          const r = planProject({ ...opts, brief, source: brief ? 'llm' : 'local' });
+          r.spec.palette = spec.palette; r.spec.meta.theme = meta.theme; r.spec.meta.createdAt = meta.createdAt || r.spec.meta.createdAt;
+          return send(res, 200, { scenes: r.spec.scenes, plan: r.plan, warning });
+        }
+        if (kindOp === 'audio') return send(res, 200, { audio: buildAudio(spec), slots: collectSlots(spec) });
+      } catch (e) { return fail(res, 400, e.message); }
+      return fail(res, 404, 'عملية تخطيط غير معروفة');
+    }
+    if (sub === 'imagegen' && m === 'POST') {
+      const b = await readJsonBody(req);
+      try { return send(res, 201, await generateForProject({ dir, providerId: b.provider, prompt: b.prompt, promptEn: b.promptEn, aspect: b.aspect, slot: b.slot })); }
+      catch (e) { return fail(res, e instanceof NotConfiguredError ? 501 : 500, e.message); }
     }
     if (sub === 'render' && m === 'POST') {
       const b = await readJsonBody(req);
