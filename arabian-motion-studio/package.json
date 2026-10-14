@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "description": "Arabic RTL vertical (9:16) motion-video generator: SVG/CSS scenes, Pexels, Lucide \u2192 real MP4",
   "scripts": {
-    "studio": "node src/cli.mjs",
+    "studio": "node studio/server.mjs",
+    "cli": "node src/cli.mjs",
     "check": "node src/cli.mjs check",
     "demo": "node src/cli.mjs render demo"
   },
   "dependencies": {
+    "@fontsource/aref-ruqaa": "^5.3.0",
+    "@fontsource/el-messiri": "^5.3.0",
     "@fontsource/noto-kufi-arabic": "^5.3.0",
     "@fontsource/tajawal": "^5.3.0",
     "lucide-static": "^1.57.0",

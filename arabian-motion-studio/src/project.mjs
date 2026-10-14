@@ -6,7 +6,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ICON_DIR = path.join(ROOT, 'node_modules/lucide-static/icons');
-const FONT_DIR = path.join(ROOT, 'assets/fonts');
+export const FONT_DIR = path.join(ROOT, 'assets/fonts');
 
 export const readJson = (p, fallback) => {
   if (!fs.existsSync(p)) {
@@ -53,8 +53,11 @@ export function parseTime(v, ctx) {
   return t + (m[5] ? Number(m[5]) : 0);
 }
 
-export function loadProject(dir) {
-  const spec = readJson(path.join(dir, 'project.json'));
+// opts.spec: use an unsaved draft instead of project.json (studio live preview)
+// opts.url:  (absolutePath) => url   (default file://; the studio serves over http)
+export function loadProject(dir, opts = {}) {
+  const toUrl = opts.url || ((f) => pathToFileURL(f).href);
+  const spec = opts.spec || readJson(path.join(dir, 'project.json'));
   const assets = readJson(path.join(dir, 'assets.json'), {});
   const sync = spec.sync ? readJson(path.join(dir, spec.sync), null) : null;
   const palette = Object.assign({ bg: '#0B0F1A', ink: '#F4F1EA', accent: '#FF5A36', accent2: '#2DD4BF', muted: '#8A93A6' }, spec.palette);
@@ -90,6 +93,13 @@ export function loadProject(dir) {
         L.wordAt = Array.from({ length: n }, (_, k) => parseTime(`@w${L.wordsFrom + k}`, { ...ctx, total }) - start);
         if (L.at === 0) L.at = L.wordAt[0];
       }
+      if (L.type === 'polaroid' && L.asset) {
+        const a = assets[L.asset];
+        if (!a) throw new Error(`scene ${S.id}: asset "${L.asset}" is not registered in assets.json`);
+        const f = path.resolve(dir, a.file);
+        if (!fs.existsSync(f)) throw new Error(`scene ${S.id}: asset file missing: ${a.file}`);
+        L.src = toUrl(f);
+      }
       if (L.type === 'image' || L.type === 'video') {
         const a = assets[L.asset];
         if (!a) throw new Error(`scene ${S.id}: asset "${L.asset}" is not registered in assets.json`);
@@ -97,7 +107,7 @@ export function loadProject(dir) {
         if (!fs.existsSync(f)) throw new Error(`scene ${S.id}: asset file missing: ${a.file}`);
         L.file = f;
         L.assetType = a.type;
-        if (L.type === 'image') L.src = pathToFileURL(f).href;
+        if (L.type === 'image') L.src = toUrl(f);
       }
       L._index = li;
       return L;
@@ -109,14 +119,15 @@ export function loadProject(dir) {
   for (const f of spec.fontFaces || defaultFontFaces()) {
     const abs = path.join(FONT_DIR, f.file);
     if (!fs.existsSync(abs)) throw new Error('font file missing: ' + f.file);
-    fontFaces.push({ family: f.family, weight: f.weight, url: pathToFileURL(abs).href, range: f.range, sample: f.sample });
+    fontFaces.push({ family: f.family, weight: f.weight, url: toUrl(abs), range: f.range, sample: f.sample });
   }
 
   return {
-    dir, name: spec.name || path.basename(dir), spec, assets, sync, total,
+    dir, name: spec.name || path.basename(dir), spec, assets, sync, total, toUrl,
     resolved: {
       width: 1080, height: 1920, fps, palette,
-      fonts: Object.assign({ display: "'Noto Kufi Arabic','Tajawal',sans-serif", body: "'Tajawal','Noto Kufi Arabic',sans-serif" }, spec.fonts),
+      fonts: Object.assign({ display: "'Noto Kufi Arabic','Tajawal',sans-serif", body: "'Tajawal','Noto Kufi Arabic',sans-serif",
+        script: "'Aref Ruqaa','Noto Kufi Arabic',serif", serif: "'El Messiri','Tajawal',serif" }, spec.fonts),
       fontFaces, scenes: out,
     },
   };
@@ -127,6 +138,8 @@ function defaultFontFaces() {
   const latin = 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2212';
   const out = [];
   for (const w of [400, 800, 900]) out.push({ family: 'Noto Kufi Arabic', weight: w, file: `noto-kufi-arabic-arabic-${w}-normal.woff2`, range: arab });
+  for (const w of [400, 700]) out.push({ family: 'Aref Ruqaa', weight: w, file: `aref-ruqaa-arabic-${w}-normal.woff2`, range: arab });
+  for (const w of [500, 700]) out.push({ family: 'El Messiri', weight: w, file: `el-messiri-arabic-${w}-normal.woff2`, range: arab });
   for (const w of [400, 500, 700, 800]) {
     out.push({ family: 'Tajawal', weight: w, file: `tajawal-arabic-${w}-normal.woff2`, range: arab });
     out.push({ family: 'Tajawal', weight: w, file: `tajawal-latin-${w}-normal.woff2`, range: latin, sample: 'Aa' });

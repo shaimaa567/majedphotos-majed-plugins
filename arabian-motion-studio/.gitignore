@@ -3,3 +3,8 @@ node_modules/
 output/
 projects/*/.cache/
 .cache/
+# صور العملاء والمنتجات تبقى على جهازك فقط
+projects/mm-*/media/
+projects/mm-*/audio/
+projects/.trash/
+*.bak

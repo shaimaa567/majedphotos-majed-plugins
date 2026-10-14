@@ -13,7 +13,7 @@ export function run(cmd, args, opts = {}) {
 }
 
 // video layers: pre-extract frames (cached) so every output frame maps to an exact source frame
-export function prepVideoLayers(P) {
+export function prepVideoLayers(P, urlOf = (d) => pathToFileURL(d + path.sep).href) {
   const fps = P.resolved.fps;
   for (const sc of P.resolved.scenes) {
     for (const L of sc.layers) {
@@ -28,7 +28,7 @@ export function prepVideoLayers(P) {
           '-vf', `fps=${fps},scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920`, '-q:v', '2', path.join(dir, '%05d.jpg')]);
       }
       L.frameCount = fs.readdirSync(dir).filter((f) => f.endsWith('.jpg')).length;
-      L.framesBase = pathToFileURL(dir + path.sep).href;
+      L.framesBase = urlOf(dir);
     }
   }
 }

@@ -22,6 +22,10 @@ export function validate(P) {
       if (L.type === 'icon') dup(seen.icon, L.name, where, 'icon');
       if (L.type === 'art') dup(seen.art, `${L.style || 'shards'}:${L.seed || 1}`, where, 'art composition (style+seed)');
       if (L.type === 'image' || L.type === 'video') dup(seen.asset, L.asset, where, 'asset');
+      if (L.type === 'polaroid') {
+        if (L.asset) dup(seen.asset, L.asset, where, 'asset');
+        else Wn(`${where}: إطار Polaroid بلا صورة (placeholder) — ضع صورة حقيقية قبل التصدير النهائي`);
+      }
       if (L.type === 'text') {
         dup(seen.text, L.text.replace(/\*/g, '').trim(), where, 'text');
         if (!hasArabic(L.text) && !/[A-Za-z]/.test(L.text)) Wn(`${where}: text has no letters`);

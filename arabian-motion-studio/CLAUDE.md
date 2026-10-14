@@ -15,3 +15,9 @@
 فكرة/سكربت → (تعليق صوتي mp3 → `sync`) → مشاهد في project.json → `pexels search/pick` → `check` → `sheet` → `render --preview` → `render`.
 
 التفاصيل: `README.md` · الخطة: `docs/PLAN.md`.
+
+## الاستوديو (Ms. Memories)
+- الواجهة: `npm run studio` ← `studio/server.mjs` + `studio/ui/`. لا تُنشئ محركًا ثانيًا: المعاينة تحمّل `engine/runtime.js` والتصدير يشغّل `src/cli.mjs render`.
+- قوالب البراند وباليته في `studio/templates.mjs`؛ ألوان الطبقات بأسماء الباليت (`accent`, `ink`, `bg`, `accent2`, `muted`).
+- أي طبقة جديدة في المحرك: أضيفيها في `engine/runtime.js` + حقولها في `layerEditor` (studio/ui/app.js) + قاعدة في `src/validate.mjs` إن لزم.
+- لا تدّعي نجاح تكامل لم يُختبر (Pexels/sync غير مختبرين حيًا).

@@ -31,8 +31,10 @@
     wipeUp: (p) => ({ clip: `inset(${(1 - p) * 100}% 0 0 0)` }),
     blur: (p) => ({ o: clamp(p * 1.6), blur: (1 - p) * 18, ty: (1 - p) * 24 }),
     draw: (p) => ({ draw: p }),
+    settle: (p) => ({ o: clamp(p * 3), ty: -(1 - p) * 520, r: -(1 - p) * 16 }),
+    flip: (p) => ({ o: clamp(p * 3), s: 0.6 + 0.4 * p, r: (1 - p) * 40 }),
   };
-  const DEFAULT_EASE = { pop: 'outBack', draw: 'inOutCubic', slideR: 'outExpo', slideL: 'outExpo', rise: 'outExpo' };
+  const DEFAULT_EASE = { pop: 'outBack', settle: 'outBack', flip: 'outBack', draw: 'inOutCubic', slideR: 'outExpo', slideL: 'outExpo', rise: 'outExpo' };
 
   const base = () => ({ o: 1, tx: 0, ty: 0, s: 1, r: 0, clip: null, blur: 0, draw: 1 });
   const stateOf = (name, p) => Object.assign(base(), (PRESET[name] || PRESET.fade)(p));
@@ -131,6 +133,21 @@
         inner += `<polygon points="-100,${y + sk} ${W + 100},${y} ${W + 100},${y + h0} -100,${y + h0 + sk}" fill="${col}" opacity="${(0.07 + R() * 0.15).toFixed(3)}"/>`;
       }
       html += g(18, 0, inner);
+    } else if (style === 'lattice') {
+      let inner = '';
+      const step = 130 + Math.floor(R() * 40);
+      for (let y = -step; y < H + step; y += step) for (let x = -step; x < W + step; x += step) {
+        const cx2 = x + ((y / step) % 2 ? step / 2 : 0), h2 = step * 0.5, w2 = step * 0.42, hot = R() < 0.12;
+        inner += `<polygon points="${cx2},${y - h2} ${cx2 + w2},${y} ${cx2},${y + h2} ${cx2 - w2},${y}" fill="${hot ? pick([c.accent, c.accent2]) : 'none'}" fill-opacity="${hot ? (0.1 + R() * 0.18).toFixed(2) : 0}" stroke="${c.accent}" stroke-opacity=".16" stroke-width="2"/>`;
+      }
+      html += g(10, 0, inner);
+    } else if (style === 'frames') {
+      let inner = '';
+      for (let i = 0; i < 6; i++) {
+        const w0 = 360 + i * 130 + R() * 60, h0 = w0 * 1.16, cx2 = R() * W, cy2 = R() * H, rot = -18 + R() * 36;
+        inner += `<rect x="${-w0 / 2}" y="${-h0 / 2}" width="${w0}" height="${h0}" transform="translate(${cx2.toFixed(0)} ${cy2.toFixed(0)}) rotate(${rot.toFixed(1)})" fill="${i % 3 === 0 ? c.accent2 : 'none'}" fill-opacity=".35" stroke="${c.accent}" stroke-opacity="${(0.12 + R() * 0.2).toFixed(2)}" stroke-width="3"/>`;
+      }
+      html += g(16, 0, inner);
     } else if (style === 'grid') {
       let inner = '';
       const step = 96;
@@ -147,8 +164,10 @@
   // ---------- layer builders ----------
   function buildLayer(L, sceneEl, scene) {
     const pal = PROJECT.palette;
+    const C = (v) => (v && pal[v]) || v;
     const el = document.createElement('div');
     place(el, L);
+    el.dataset.li = String(L._index); el.dataset.scene = scene.id; el.dataset.type = L.type;
     sceneEl.appendChild(el);
     const inst = { L, el, update() {} };
 
@@ -208,13 +227,13 @@
         const pad = L.badgePad ?? 36, tot = size + pad * 2, ch = tot * 0.22, off = L.badgeShadow ?? 12;
         const poly = `0,0 ${tot - ch},0 ${tot},${ch} ${tot},${tot} ${ch},${tot} 0,${tot - ch}`;
         pre = `<svg width="${tot}" height="${tot}" viewBox="0 0 ${tot} ${tot}" style="position:absolute;left:${-pad}px;top:${-pad}px;overflow:visible">` +
-              `<polygon points="${poly}" transform="translate(${off},${off})" fill="${L.badgeShadowColor || pal.accent}"/>` +
-              `<polygon points="${poly}" fill="${L.badge === true ? pal.bg : L.badge}" stroke="${L.color || pal.ink}" stroke-width="3"/></svg>`;
+              `<polygon points="${poly}" transform="translate(${off},${off})" fill="${C(L.badgeShadowColor) || pal.accent}"/>` +
+              `<polygon points="${poly}" fill="${L.badge === true ? pal.bg : C(L.badge)}" stroke="${C(L.color) || pal.ink}" stroke-width="3"/></svg>`;
       }
       el.innerHTML = pre + L.svg;
       const s = el.querySelector('svg:last-of-type');
       s.setAttribute('width', size); s.setAttribute('height', size);
-      s.setAttribute('stroke', L.color || pal.ink);
+      s.setAttribute('stroke', C(L.color) || pal.ink);
       s.setAttribute('stroke-width', String(L.stroke || 1.75));
       s.style.position = 'absolute'; s.style.left = '0'; s.style.top = '0';
       const shapes = s.querySelectorAll('path,line,polyline,polygon,circle,rect,ellipse');
@@ -231,7 +250,7 @@
       sv.setAttribute('width', W); sv.setAttribute('height', H); sv.setAttribute('viewBox', `0 0 ${W} ${H}`);
       let pts = L.points;
       if (L.kind === 'rect') pts = [[L.rx, L.ry], [L.rx + L.rw, L.ry], [L.rx + L.rw, L.ry + L.rh], [L.rx, L.ry + L.rh]];
-      sv.innerHTML = `<polygon points="${pts.map((p) => p.join(',')).join(' ')}" fill="${L.fill || 'none'}" fill-opacity="${L.fillOpacity ?? 1}" stroke="${L.stroke || 'none'}" stroke-width="${L.strokeWidth || 0}"/>`;
+      sv.innerHTML = `<polygon points="${pts.map((p) => p.join(',')).join(' ')}" fill="${C(L.fill) || 'none'}" fill-opacity="${L.fillOpacity ?? 1}" stroke="${C(L.stroke) || 'none'}" stroke-width="${L.strokeWidth || 0}"/>`;
       el.appendChild(sv);
       inst.update = (local) => apply(el, layerState(L, local, 'wipe'));
     } else if (L.type === 'bgtext') {
@@ -242,7 +261,7 @@
         const r = document.createElement('div');
         r.dir = hasArabic(L.text) ? 'rtl' : 'ltr';
         r.style.cssText = `position:absolute;left:0;white-space:nowrap;font:${L.weight || 900} ${size}px/1 ${PROJECT.fonts.display};` +
-          `color:${L.fill || 'transparent'};-webkit-text-stroke:${L.strokeWidth ?? 3}px ${L.color || pal.ink};opacity:${L.opacity ?? 0.13};top:${(L.y ?? 120) + i * size * (L.gap ?? 1.15)}px`;
+          `color:${C(L.fill) || 'transparent'};-webkit-text-stroke:${L.strokeWidth ?? 3}px ${C(L.color) || pal.ink};opacity:${L.opacity ?? 0.13};top:${(L.y ?? 120) + i * size * (L.gap ?? 1.15)}px`;
         r.textContent = Array(6).fill(L.text).join('   ');
         el.appendChild(r); rowEls.push(r);
       }
@@ -253,13 +272,13 @@
     } else if (L.type === 'text') {
       const size = L.size || 90;
       el.style.width = (L.w ?? 900) + 'px';
-      const fam = L.font === 'body' ? PROJECT.fonts.body : PROJECT.fonts.display;
-      const accent = L.keyColor || pal.accent;
+      const fam = PROJECT.fonts[L.font] || PROJECT.fonts.display;
+      const accent = C(L.keyColor) || pal.accent;
       const box = document.createElement('div');
       box.className = 'txt';
       box.dir = hasArabic(L.text) ? 'rtl' : 'ltr';
       box.style.cssText = `font-family:${fam};font-weight:${L.weight || 800};font-size:${size}px;line-height:${L.lh || 1.45};` +
-        `color:${L.color || pal.ink};text-align:${L.align || (box.dir === 'rtl' ? 'right' : 'left')};` +
+        `color:${C(L.color) || pal.ink};text-align:${L.align || (box.dir === 'rtl' ? 'right' : 'left')};` +
         (L.shadow ? `text-shadow:${L.shadow};` : '') + (L.tracking ? `letter-spacing:${L.tracking}px;` : '');
       const words = [];
       const toks = L.text.split(/(\s+)/);
@@ -269,7 +288,7 @@
         if (!tk) return;
         let t = tk, start = false, end = false;
         if (t.startsWith('*')) { keyOn = true; t = t.slice(1); start = true; }
-        if (t.endsWith('*')) { end = true; t = t.slice(0, -1); }
+        if (t.includes('*')) { end = true; t = t.replace(/\*/g, ''); } // closing * may be followed by punctuation (e.g. *نحن*؟)
         const sp = document.createElement('span');
         sp.className = 'w' + (hasLatin(t) && !hasArabic(t) ? ' ltr' : '');
         sp.textContent = t;
@@ -292,6 +311,148 @@
         } else {
           apply(el, layerState(L, local, 'rise'));
         }
+      };
+    } else if (L.type === 'fill') {
+      el.style.left = '0px'; el.style.top = '0px'; el.style.width = W + 'px'; el.style.height = H + 'px';
+      el.style.background = L.gradient || C(L.color) || pal.bg;
+      inst.update = (local) => apply(el, layerState(L, local, 'none'));
+    } else if (L.type === 'rays') {
+      // sharp light wedges radiating from a point ("أشعة الضوء")
+      el.style.left = '0px'; el.style.top = '0px'; el.style.width = W + 'px'; el.style.height = H + 'px'; el.style.overflow = 'hidden';
+      if (L.blend) el.style.mixBlendMode = L.blend;
+      const cx = L.cx ?? W * 0.5, cy = L.cy ?? H * 0.3, n = L.count || 14, R0 = Math.hypot(W, H) * 1.1;
+      const col = C(L.color) || '#FFFFFF', gid = `rg_${scene.id}_${L._index}`, wedge = (Math.PI * 2) / n;
+      let pts = '';
+      for (let i = 0; i < n; i += 2) {
+        const a0 = i * wedge, a1 = a0 + wedge * (L.fill ?? 0.6);
+        pts += `<polygon points="${cx},${cy} ${(cx + Math.cos(a0) * R0).toFixed(1)},${(cy + Math.sin(a0) * R0).toFixed(1)} ${(cx + Math.cos(a1) * R0).toFixed(1)},${(cy + Math.sin(a1) * R0).toFixed(1)}" fill="url(#${gid})"/>`;
+      }
+      const sv = document.createElementNS(NS, 'svg');
+      sv.setAttribute('width', W); sv.setAttribute('height', H); sv.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      sv.innerHTML = `<defs><radialGradient id="${gid}" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${R0 * 0.7}"><stop offset="0" stop-color="${col}" stop-opacity="${L.opacity ?? 0.5}"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></radialGradient></defs><g>${pts}</g>`;
+      el.appendChild(sv);
+      const g = sv.querySelector('g');
+      inst.update = (local) => {
+        g.setAttribute('transform', `rotate(${(L.speed ?? 4) * local} ${cx} ${cy})`);
+        const st = layerState(L, local, 'fade');
+        st.o *= 0.9 + 0.1 * Math.sin(local * 1.7);
+        apply(el, st);
+      };
+    } else if (L.type === 'sparkles') {
+      // magic twinkles: sharp 4-point stars, seeded, deterministic
+      el.style.left = '0px'; el.style.top = '0px'; el.style.width = W + 'px'; el.style.height = H + 'px';
+      const R = rng(L.seed || 1), n = L.count || 14, rg = L.region || { x: 60, y: 260, w: 960, h: 1200 };
+      const cols = (L.colors || ['#FFFFFF', pal.accent, pal.accent2]).map(C);
+      const sv = document.createElementNS(NS, 'svg');
+      sv.setAttribute('width', W); sv.setAttribute('height', H); sv.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      const stars = [];
+      let html = '';
+      for (let i = 0; i < n; i++) {
+        const r = (L.size || 46) * (0.45 + R() * 0.9), q = r * 0.17;
+        const d = `M0 ${-r}L${q} ${-q}L${r} 0L${q} ${q}L0 ${r}L${-q} ${q}L${-r} 0L${-q} ${-q}Z`;
+        stars.push({ x: rg.x + R() * rg.w, y: rg.y + R() * rg.h, ph: R(), f: 0.35 + R() * 0.5, rot: R() * 40 });
+        html += `<path data-s="${i}" d="${d}" fill="${cols[Math.floor(R() * cols.length)]}"/>`;
+      }
+      sv.innerHTML = html; el.appendChild(sv);
+      const nodes = [...sv.querySelectorAll('path')];
+      inst.update = (local) => {
+        nodes.forEach((nd, i) => {
+          const s = stars[i], k = Math.pow(Math.max(0, Math.sin(Math.PI * 2 * (s.f * local + s.ph))), 2);
+          nd.setAttribute('transform', `translate(${s.x.toFixed(1)} ${s.y.toFixed(1)}) rotate(${s.rot + local * 12}) scale(${(0.15 + 0.85 * k).toFixed(3)})`);
+          nd.setAttribute('opacity', k.toFixed(3));
+        });
+        apply(el, layerState(L, local, 'fade'));
+      };
+    } else if (L.type === 'ribbon') {
+      // red satin ribbon sweeping across the frame
+      el.style.left = '0px'; el.style.top = '0px'; el.style.width = W + 'px'; el.style.height = H + 'px';
+      const y0 = L.y ?? 1480;
+      const paths = {
+        sweep: `M -120 ${y0 + 240} C 260 ${y0 - 160}, 720 ${y0 + 700}, 1200 ${y0 + 120}`,
+        wave: `M -120 ${y0} C 200 ${y0 - 260}, 380 ${y0 + 260}, 540 ${y0} S 880 ${y0 - 260}, 1200 ${y0 + 20}`,
+        diagonal: `M -120 ${y0 + 360} L 1200 ${y0 - 220}`,
+        loop: `M -120 ${y0 + 120} C 300 ${y0 - 300}, 900 ${y0 - 300}, 780 ${y0 + 40} S 120 ${y0 + 420}, 1200 ${y0 + 200}`,
+      };
+      const d = L.d || paths[L.shape || 'sweep'], wd = L.width || 70, gid = `sg_${scene.id}_${L._index}`;
+      const c1 = C(L.color) || '#C8102E', c0 = C(L.dark) || '#6E0A18', c2 = C(L.light) || '#F2475F';
+      const sv = document.createElementNS(NS, 'svg');
+      sv.setAttribute('width', W); sv.setAttribute('height', H); sv.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      sv.innerHTML = `<defs><linearGradient id="${gid}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${W}" y2="0">` +
+        `<stop offset="0" stop-color="${c0}"/><stop offset=".3" stop-color="${c1}"/><stop offset=".5" stop-color="${c2}"/><stop offset=".72" stop-color="${c1}"/><stop offset="1" stop-color="${c0}"/></linearGradient></defs>` +
+        `<path class="rb" d="${d}" transform="translate(0 16)" stroke="#2A0208" stroke-opacity=".22" stroke-width="${wd}" fill="none"/>` +
+        `<path class="rb" d="${d}" stroke="${c0}" stroke-width="${wd + 6}" fill="none"/>` +
+        `<path class="rb" d="${d}" stroke="url(#${gid})" stroke-width="${wd}" fill="none"/>` +
+        `<path class="rb" d="${d}" transform="translate(0 ${-wd * 0.2})" stroke="#FFFFFF" stroke-opacity=".34" stroke-width="${wd * 0.16}" fill="none"/>`;
+      el.appendChild(sv);
+      const nodes = [...sv.querySelectorAll('.rb')];
+      nodes.forEach((n) => { n.setAttribute('pathLength', '1'); n.style.strokeDasharray = '1 1'; });
+      inst.update = (local) => {
+        const st = layerState(L, local, 'draw');
+        nodes.forEach((n) => { n.style.strokeDashoffset = String(1 - st.draw); });
+        apply(el, Object.assign(st, { draw: 1 }));
+      };
+    } else if (L.type === 'bow') {
+      // geometric satin bow (sharp facets)
+      const S = L.size || 360, gid = `bg_${scene.id}_${L._index}`;
+      el.style.width = (S * 1.3) + 'px'; el.style.height = (S * 1.5) + 'px';
+      const c1 = C(L.color) || '#C8102E', c0 = C(L.dark) || '#6E0A18', c2 = C(L.light) || '#F2475F';
+      const P = (arr) => arr.map(([a, b]) => `${(a * S).toFixed(1)},${(b * S).toFixed(1)}`).join(' ');
+      const o = S * 0.65; // origin x offset so that bow is centred in the box
+      el.innerHTML = `<svg width="${S * 1.3}" height="${S * 1.5}" viewBox="${-o} ${-S * 0.4} ${S * 1.3} ${S * 1.5}" style="overflow:visible">` +
+        `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c2}"/><stop offset=".55" stop-color="${c1}"/><stop offset="1" stop-color="${c0}"/></linearGradient></defs>` +
+        `<g transform="translate(0 ${S * 0.04})" fill="#2A0208" fill-opacity=".2"><polygon points="${P([[-0.10, 0], [-0.52, -0.30], [-0.60, 0.06], [-0.50, 0.34]])}"/><polygon points="${P([[0.10, 0], [0.52, -0.30], [0.60, 0.06], [0.50, 0.34]])}"/></g>` +
+        `<polygon points="${P([[-0.07, 0.08], [0.04, 0.08], [-0.12, 0.84], [-0.22, 0.72], [-0.36, 0.84]])}" fill="${c0}"/>` +
+        `<polygon points="${P([[0.07, 0.08], [-0.04, 0.08], [0.12, 0.84], [0.22, 0.72], [0.36, 0.84]])}" fill="${c1}"/>` +
+        `<polygon points="${P([[-0.10, 0], [-0.52, -0.30], [-0.60, 0.06], [-0.50, 0.34]])}" fill="url(#${gid})"/>` +
+        `<polygon points="${P([[0.10, 0], [0.52, -0.30], [0.60, 0.06], [0.50, 0.34]])}" fill="url(#${gid})"/>` +
+        `<polygon points="${P([[-0.10, 0], [-0.52, -0.30], [-0.46, 0.00]])}" fill="#fff" fill-opacity=".28"/>` +
+        `<polygon points="${P([[0.10, 0], [0.52, -0.30], [0.46, 0.00]])}" fill="#fff" fill-opacity=".18"/>` +
+        `<polygon points="${P([[-0.12, -0.12], [0.12, -0.12], [0.15, -0.06], [0.15, 0.08], [0.12, 0.14], [-0.12, 0.14], [-0.15, 0.08], [-0.15, -0.06]])}" fill="${c1}" stroke="${c0}" stroke-width="3"/>` +
+        `<polygon points="${P([[-0.12, -0.12], [0.12, -0.12], [0.0, -0.04]])}" fill="#fff" fill-opacity=".3"/></svg>`;
+      inst.update = (local) => apply(el, layerState(L, local, 'pop'));
+    } else if (L.type === 'polaroid') {
+      const w = L.w || 640, h = w * 1.16;
+      el.style.width = w + 'px'; el.style.height = h + 'px';
+      const rot = L.rot ?? -4;
+      const card = document.createElement('div');
+      card.style.cssText = `position:absolute;inset:0;background:${C(L.paper) || '#FFFDF9'};transform:rotate(${rot}deg);` +
+        `box-shadow:${w * 0.026}px ${w * 0.034}px 0 ${L.shadowColor || 'rgba(110,10,24,.30)'};`;
+      const ph = document.createElement('div');
+      ph.style.cssText = `position:absolute;left:5.5%;top:5.5%;width:89%;height:76.7%;overflow:hidden;background:${pal.accent2}`;
+      let img = null;
+      if (L.src) {
+        img = document.createElement('img');
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;transform-origin:50% 50%';
+        if (L.filter) img.style.filter = L.filter;
+        img.src = L.src; pending.push(img.decode().catch(() => {}));
+        ph.appendChild(img);
+      } else {
+        ph.dataset.placeholder = '1';
+        ph.style.background = `repeating-linear-gradient(45deg, ${pal.accent2} 0 22px, ${pal.bg} 22px 44px)`;
+        const t = document.createElement('div');
+        t.textContent = L.placeholder || 'صورتك هنا';
+        t.style.cssText = `position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:800 ${w * 0.08}px ${PROJECT.fonts.display};color:${pal.accent}`;
+        ph.appendChild(t);
+      }
+      card.appendChild(ph);
+      if (L.caption) {
+        const c = document.createElement('div');
+        c.dir = 'rtl'; c.textContent = L.caption;
+        c.style.cssText = `position:absolute;left:5%;right:5%;bottom:3.2%;height:12.5%;display:flex;align-items:center;justify-content:center;text-align:center;` +
+          `font:${L.captionWeight || 700} ${w * (L.captionSize || 0.078)}px ${PROJECT.fonts[L.captionFont || 'script'] || PROJECT.fonts.display};color:${C(L.captionColor) || '#3A0A14'}`;
+        card.appendChild(c);
+      }
+      if (L.tape !== false) {
+        const tp = document.createElement('div');
+        tp.style.cssText = `position:absolute;left:36%;top:-3.2%;width:28%;height:6.5%;background:${C(L.tapeColor) || pal.accent};opacity:.88;transform:rotate(${L.tapeRot ?? -5}deg);` +
+          `clip-path:polygon(0 0,100% 0,96% 50%,100% 100%,0 100%,4% 50%)`;
+        card.appendChild(tp);
+      }
+      el.appendChild(card);
+      const kb = L.kenburns;
+      inst.update = (local) => {
+        if (img && kb) { const q = clamp(local / (scene.duration || 1)); img.style.transform = `scale(${(kb.from ?? 1) + ((kb.to ?? 1.1) - (kb.from ?? 1)) * q})`; }
+        apply(el, layerState(L, local, 'settle'));
       };
     } else {
       throw new Error('unknown layer type: ' + L.type);
@@ -337,7 +498,8 @@
     stage.innerHTML = '';
     stage.style.background = project.palette.bg;
     // fonts (real files with real weights)
-    const style = document.createElement('style');
+    document.getElementById('fontfaces')?.remove();
+    const style = document.createElement('style'); style.id = 'fontfaces';
     style.textContent = project.fontFaces.map((f) => `@font-face{font-family:'${f.family}';font-weight:${f.weight};src:url('${f.url}') format('woff2');unicode-range:${f.range || 'U+0000-10FFFF'};}`).join('\n');
     document.head.appendChild(style);
     await Promise.all(project.fontFaces.map((f) => document.fonts.load(`${f.weight} 40px '${f.family}'`, f.sample || 'ع A')));
@@ -374,6 +536,20 @@
     return true;
   }
 
+  window.layerRect = (sceneId, li) => {
+    const sc = scenes.find((x) => x.id === sceneId); const ly = sc && sc.layers[li];
+    if (!ly) return null; const r = ly.el.getBoundingClientRect();
+    return { x: r.left, y: r.top, w: r.width, h: r.height };
+  };
+  const BACK = new Set(['art', 'fill', 'bgtext', 'rays', 'sparkles', 'ribbon', 'shape']); // full-stage layers: select from the list
+  window.hitTest = (x, y) => {
+    const hits = document.elementsFromPoint(x, y).map((e) => e.closest('.layer[data-li]')).filter(Boolean)
+      .filter((e, i, a) => a.indexOf(e) === i && parseFloat(e.style.opacity || '1') > 0.05);
+    const area = (e) => { const r = e.getBoundingClientRect(); return r.width * r.height; };
+    const front = hits.filter((e) => !BACK.has(e.dataset.type)).sort((a, b) => area(a) - area(b));
+    const pick = front[0] || hits[0];
+    return pick ? { scene: pick.dataset.scene, li: Number(pick.dataset.li), type: pick.dataset.type } : null;
+  };
   window.initProject = initProject;
   window.renderFrame = renderFrame;
 })();
