@@ -1,0 +1,5 @@
+node_modules/
+.env
+output/
+projects/*/.cache/
+.cache/
